@@ -1,32 +1,26 @@
-import './css/styles.css';
 import Notiflix from 'notiflix';
 import SimpleLightbox from 'simplelightbox';
 import 'simplelightbox/dist/simple-lightbox.min.css';
+import './css/styles.css';
 import { FotoApi } from './fetchFotos';
-
-const gallery = new SimpleLightbox('.gallery a', {
-  captionsData: 'alt',
-  captionDelay: 250,
-});
-
-const fotoApi = new FotoApi();
 
 const searchFormEl = document.querySelector('#search-form');
 const galleryEl = document.querySelector('.gallery');
 const loadMorBtnEl = document.querySelector('.load-more');
 
-searchFormEl.addEventListener('submit', onSearchFormSubmit);
+searchFormEl.addEventListener('submit', onSearchSubmit);
 loadMorBtnEl.addEventListener('click', onLoadMorBtn);
+
+const fotoApi = new FotoApi();
 
 const per_page = fotoApi.per_page;
 
-function onSearchFormSubmit(e) {
+function onSearchSubmit(e) {
   e.preventDefault();
   fotoApi.value = e.target.elements.searchQuery.value.trim();
   loadMorBtnDisable();
 
   if (fotoApi.value === '') {
-    Notiflix.Notify.warning('Please enter, what exactly you want to find?');
     return;
   }
   fotoApi.resetPage();
@@ -58,17 +52,9 @@ function onLoadMorBtn() {
   fotoApi.fetchFotos().then(card => {
     randerMarkup(card.hits);
 
-    const { height: cardHeight } =
-      galleryEl.firstElementChild.getBoundingClientRect();
-
-    window.scrollBy({
-      top: cardHeight * 2,
-      behavior: 'smooth',
-    });
-
     loadMorBtnEnable();
     if (card.hits.length < per_page) {
-      loadMorButtonDisable();
+      loadMorBtnDisable();
       Notiflix.Notify.failure(
         "We're sorry, but you've reached the end of search results."
       );
@@ -99,8 +85,9 @@ function createMarkup(array) {
         largeImageURL,
       } = foto;
       return `<div class="photo-card">
-       <a href="${largeImageURL}" class="gallery__item">
-       <img src="${webformatURL}" 
+       <a href="${largeImageURL}">
+       <img class="gallery__image"
+       src="${webformatURL}" 
        alt="${tags}" 
        loading="lazy" />
        </a>
@@ -130,3 +117,16 @@ function loadMorBtnDisable() {
 function loadMorBtnEnable() {
   loadMorBtnEl.classList.remove('hidden');
 }
+
+const gallery = new SimpleLightbox('.gallery a', {
+  captionsData: 'alt',
+});
+
+Notiflix.Notify.init({
+  success: {
+    background: 'rgb(9, 199, 155)',
+  },
+  failure: {
+    background: 'rgb(199,9,79)',
+  },
+});
