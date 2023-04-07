@@ -1,147 +1,132 @@
-import debounce from 'lodash.debounce';
-import Notiflix from 'notiflix';
 import './css/styles.css';
-import { fetchCountries } from './fetchCountries';
+import Notiflix from 'notiflix';
+import SimpleLightbox from 'simplelightbox';
+import 'simplelightbox/dist/simple-lightbox.min.css';
+import { FotoApi } from './fetchFotos';
 
-const DEBOUNCE_DELAY = 300;
+const gallery = new SimpleLightbox('.gallery a', {
+  captionsData: 'alt',
+  captionDelay: 250,
+});
 
-const searchInputEl = document.querySelector('#search-box');
-const countryListEl = document.querySelector('.country-list');
-const countryInfoEl = document.querySelector('.country-info');
+const fotoApi = new FotoApi();
 
-searchInputEl.addEventListener(
-  'input',
-  debounce(onSearchCountry, DEBOUNCE_DELAY)
-);
-function onSearchCountry() {
-  const searchQuery = searchInputEl.value.trim();
+const searchFormEl = document.querySelector('#search-form');
+const galleryEl = document.querySelector('.gallery');
+const loadMorBtnEl = document.querySelector('.load-more');
 
-  if (searchQuery.length === 0) {
-    clearRander();
+searchFormEl.addEventListener('submit', onSearchFormSubmit);
+loadMorBtnEl.addEventListener('click', onLoadMorBtn);
+
+const per_page = fotoApi.per_page;
+
+function onSearchFormSubmit(e) {
+  e.preventDefault();
+  fotoApi.value = e.target.elements.searchQuery.value.trim();
+  loadMorBtnDisable();
+
+  if (fotoApi.value === '') {
+    Notiflix.Notify.warning('Please enter, what exactly you want to find?');
     return;
-  } else if (searchQuery.length > 0) {
-    fetchCountries(searchQuery)
-      .then(data => {
-        if (data.length > 10) {
-          clearRander();
-          throw Notiflix.Notify.info(
-            `Too many matches found. Please enter a more specific name.`
-          );
-        } else if (data.length > 1 && data.length <= 10) {
-          countryInfoEl.innerHTML = '';
-
-          let countryCollectionArr = [];
-          let countryCollection;
-
-          for (let i = 0; i < data.length; i++) {
-            let name = data[i].name.official;
-            let flag = data[i].flags.svg;
-
-            const markupCountryList = ` <li class="country-item">
-          <img
-            src="${flag}"
-            alt="flag"
-            width="25"
-            height="20"
-          />
-          <p class="country-name">${name}</p>
-        </li>`;
-
-            countryCollectionArr.push(markupCountryList);
-            countryCollection = countryCollectionArr.join('');
-          }
-
-          countryListEl.innerHTML = countryCollection;
-        } else {
-          countryListEl.innerHTML = '';
-
-          let dataSity = data[0];
-          let name = dataSity.name.official;
-          let flag = dataSity.flags.svg;
-          let capital = dataSity.capital[0];
-          let languages = Object.values(dataSity.languages).join(', ');
-          let population = dataSity.population;
-
-          const markupCountryInfo = `<div class="country-title">
-          <img
-            src="${flag}"
-            alt="flag"
-            width="30"
-            height="25"
-          />
-          <p>${name}</p>
-        </div>
-        <p class="country-descr">
-          <span class="country-field">Capital: </span>${capital}
-        </p>
-        <p class="country-descr">
-          <span class="country-field">Population: </span>${population}
-        </p>
-        <p class="country-descr">
-          <span class="country-field">Languages: </span>${languages}
-        </p>`;
-
-          countryInfoEl.innerHTML = markupCountryInfo;
-        }
-      })
-      .catch(error => {
-        console.log(error);
-      });
   }
+  fotoApi.resetPage();
+  clearMarkup();
+  fotoApi.fetchFotos().then(({ hits, totalHits }) => {
+    if (hits.length === 0) {
+      Notiflix.Notify.failure(
+        'Sorry, there are no images matching your search query. Please try again.'
+      );
+      return;
+    }
+
+    randerMarkup(hits);
+    Notiflix.Notify.success(`Hooray! We found ${totalHits} images.`);
+
+    if (totalHits < per_page) {
+      Notiflix.Notify.failure(
+        "We're sorry, but you've reached the end of search results."
+      );
+      return;
+    }
+    gallery.refresh();
+    loadMorBtnEnable();
+  });
 }
 
-function clearRander() {
-  countryListEl.innerHTML = '';
-  countryInfoEl.innerHTML = '';
+function onLoadMorBtn() {
+  loadMorBtnDisable();
+  fotoApi.fetchFotos().then(card => {
+    randerMarkup(card.hits);
+
+    const { height: cardHeight } =
+      galleryEl.firstElementChild.getBoundingClientRect();
+
+    window.scrollBy({
+      top: cardHeight * 2,
+      behavior: 'smooth',
+    });
+
+    loadMorBtnEnable();
+    if (card.hits.length < per_page) {
+      loadMorButtonDisable();
+      Notiflix.Notify.failure(
+        "We're sorry, but you've reached the end of search results."
+      );
+    }
+    gallery.refresh();
+  });
 }
 
-console.log('TEST');
+function randerMarkup(data) {
+  const markUp = createMarkup(data);
+  galleryEl.insertAdjacentHTML('beforeend', markUp);
+}
 
-// ==========================================================
-// спроба зробити окремі функції по створенню розмітки
+function clearMarkup() {
+  galleryEl.innerHTML = '';
+}
 
-// function makeCountryInfo(flag, name, capital, population, languages) {
-//   countryInfoEl.innerHTML = ` <div class="country-title">
-//         <img
-//           src="${flag}"
-//           alt="flag"
-//           width="25"
-//           height="20"
-//         />
-//         <p>${name}</p>
-//       </div>
+function createMarkup(array) {
+  return array
+    .map(foto => {
+      const {
+        tags,
+        webformatURL,
+        likes,
+        views,
+        comments,
+        downloads,
+        largeImageURL,
+      } = foto;
+      return `<div class="photo-card">
+       <a href="${largeImageURL}" class="gallery__item">
+       <img src="${webformatURL}" 
+       alt="${tags}" 
+       loading="lazy" />
+       </a>
+     <div class="info">
+         <p class="info-item">
+           <b>Likes <br />${likes}</b>
+         </p>
+         <p class="info-item">
+           <b>Views <br />${views}</b>
+         </p>
+         <p class="info-item">
+           <b>Comments <br />${comments}</b>
+         </p>
+         <p class="info-item">
+           <b>Downloads <br />${downloads}</b>
+         </p>
+       </div>
+     </div>`;
+    })
+    .join('');
+}
 
-//       <p class="country-descr">
-//         <span class="country-field">Capital: </span>${capital}
-//       </p>
-//       <p class="country-descr">
-//         <span class="country-field">Population: </span>${population}
-//       </p>
-//       <p class="country-descr">
-//         <span class="country-field">Languages: </span>${languages}
-//       </p>`;
+function loadMorBtnDisable() {
+  loadMorBtnEl.classList.add('hidden');
+}
 
-//   // countryInfoEl.innerHTML = markupCountryInfo;
-// }
-
-// const markup = ` <div class="country-title">
-//         <img
-//           src="${flag}"
-//           alt="flag"
-//           width="25"
-//           height="20"
-//         />
-//         <p>${name}</p>
-//       </div>
-
-//       <p class="country-descr">
-//         <span class="country-field">Capital: </span>${capital}
-//       </p>
-//       <p class="country-descr">
-//         <span class="country-field">Population: </span>${population}
-//       </p>
-//       <p class="country-descr">
-//         <span class="country-field">Languages: </span>${languages}
-//       </p>`;
-
-// // console.log(markup);
+function loadMorBtnEnable() {
+  loadMorBtnEl.classList.remove('hidden');
+}
